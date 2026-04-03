@@ -1,0 +1,438 @@
+// ============================================================
+// PRISMA SCHEMA — Enterprise ERP System
+// Core Accounting, Products, Inventory, Invoicing, Clients
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// 4.1 CORE ACCOUNTING
+// ============================================================
+
+/// Chart of Accounts — the backbone of double-entry bookkeeping
+model Account {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  type      AccountType
+  currency  String   @default("INR") @db.Char(3)
+  isPandL   Boolean  @default(false) @map("is_p_and_l")
+  parentId  String?  @map("parent_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  createdBy String?  @map("created_by") @db.Uuid
+
+  // Relations
+  parent         Account?         @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children       Account[]        @relation("AccountHierarchy")
+  journalEntries JournalEntry[]
+  snapshots      AccountSnapshot[]
+  
+  // Client linked accounts
+  customerClients Client[] @relation("CustomerAccount")
+  vendorClients   Client[] @relation("VendorAccount")
+  
+  // Product income accounts
+  products       Product[] @relation("IncomeAccount")
+
+  // Bank relation
+  bankAccount    BankAccount?
+
+  @@index([type], map: "idx_accounts_type")
+  @@map("accounts")
+}
+
+enum AccountType {
+  Asset
+  Liability
+  Equity
+  Revenue
+  Expense
+}
+
+/// Transactions — the container for balanced journal entries
+/// Once posted_at is set, this record is IMMUTABLE
+model Transaction {
+  id          String    @id @default(uuid()) @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  postedAt    DateTime? @map("posted_at") @db.Timestamptz()
+  description String?
+  referenceId String?   @map("reference_id")
+  invoiceId   String?   @map("invoice_id") @db.Uuid
+  receiptId   String?   @map("receipt_id") @db.Uuid
+  paymentId   String?   @map("payment_id") @db.Uuid
+  createdBy   String?   @map("created_by") @db.Uuid
+  metadata    Json?
+
+  // Relations
+  journalEntries JournalEntry[]
+  invoice        Invoice? @relation(fields: [invoiceId], references: [id])
+  receipt        Receipt? @relation(fields: [receiptId], references: [id])
+  payment        Payment? @relation(fields: [paymentId], references: [id])
+  
+  // Inventory movements linked to this transaction
+  inventoryMovements InventoryMovement[]
+
+  @@map("transactions")
+}
+
+/// Journal Entries — individual debit/credit lines
+/// Amount is signed: positive = debit, negative = credit
+/// The SUM of all entries in a transaction MUST equal zero
+model JournalEntry {
+  id            String   @id @default(uuid()) @db.Uuid
+  transactionId String   @map("transaction_id") @db.Uuid
+  accountId     String   @map("account_id") @db.Uuid
+  amount        Decimal  @db.Decimal(18, 2) // signed: +debit, -credit
+  entryType     EntryType @map("entry_type")
+  currency      String   @default("INR") @db.Char(3)
+  taxCode       String?  @map("tax_code")
+  warehouseId   String?  @map("warehouse_id") @db.Uuid
+  costLayerId   String?  @map("cost_layer_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  account     Account     @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, createdAt], map: "idx_journal_account_posted")
+  @@index([transactionId], map: "idx_journal_tx")
+  @@map("journal_entries")
+}
+
+enum EntryType {
+  Dr
+  Cr
+}
+
+/// Account Snapshots — month-end balance snapshots for fast queries
+/// Live Balance = snapshot.balance + SUM(entries after snapshot end)
+model AccountSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  accountId   String   @map("account_id") @db.Uuid
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd   DateTime @map("period_end") @db.Date
+  balance     Decimal  @db.Decimal(18, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@unique([accountId, periodStart, periodEnd], map: "ux_snapshot_account_period")
+  @@map("account_snapshots")
+}
+
+// ============================================================
+// 4.2 PRODUCTS & INVENTORY
+// ============================================================
+
+/// Product catalog with HSN codes and GST configuration
+model Product {
+  id                     String   @id @default(uuid()) @db.Uuid
+  sku                    String   @unique
+  name                   String
+  hsnCode                String?  @map("hsn_code")
+  defaultUom             String?  @map("default_uom")
+  isStocked              Boolean  @default(true) @map("is_stocked")
+  defaultIncomeAccountId String?  @map("default_income_account_id") @db.Uuid
+  gstRate                Decimal? @map("gst_rate") @db.Decimal(5, 2)
+  gstType                GstType? @map("gst_type")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  defaultIncomeAccount Account?           @relation("IncomeAccount", fields: [defaultIncomeAccountId], references: [id])
+  costLayers           CostLayer[]
+  inventoryMovements   InventoryMovement[]
+  invoiceLines         InvoiceLine[]
+
+  @@map("products")
+}
+
+enum GstType {
+  CGST_SGST
+  IGST
+}
+
+/// Cost Layers for FIFO/LIFO inventory costing
+model CostLayer {
+  id           String   @id @default(uuid()) @db.Uuid
+  productId    String   @map("product_id") @db.Uuid
+  warehouseId  String?  @map("warehouse_id") @db.Uuid
+  qty          Decimal  @db.Decimal(18, 4)
+  unitCost     Decimal  @map("unit_cost") @db.Decimal(18, 4)
+  receivedAt   DateTime @default(now()) @map("received_at") @db.Timestamptz()
+  remainingQty Decimal  @map("remaining_qty") @db.Decimal(18, 4)
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId, receivedAt], map: "idx_cost_layers_product")
+  @@map("cost_layers")
+}
+
+/// Inventory Movements — receipt, issue, transfer, adjustment
+model InventoryMovement {
+  id           String       @id @default(uuid()) @db.Uuid
+  productId    String       @map("product_id") @db.Uuid
+  warehouseId  String?      @map("warehouse_id") @db.Uuid
+  movementType MovementType @map("movement_type")
+  qty          Decimal      @db.Decimal(18, 4)
+  unitCost     Decimal?     @map("unit_cost") @db.Decimal(18, 4)
+  relatedTxId  String?      @map("related_tx_id") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  product      Product      @relation(fields: [productId], references: [id])
+  transaction  Transaction? @relation(fields: [relatedTxId], references: [id])
+
+  @@map("inventory_movements")
+}
+
+enum MovementType {
+  receipt
+  issue
+  transfer
+  adjustment
+}
+
+// ============================================================
+// 4.3 INVOICING & DOCUMENTS
+// ============================================================
+
+/// Invoice header with e-invoicing fields (IRN, QR, e-Way Bill)
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  invoiceNumber   String?       @unique @map("invoice_number")
+  type            InvoiceType
+  date            DateTime      @db.Date
+  clientId        String?       @map("client_id") @db.Uuid
+  billingAddress  Json?         @map("billing_address")
+  shippingAddress Json?         @map("shipping_address")
+  currency        String        @default("INR") @db.Char(3)
+  totalAmount     Decimal       @map("total_amount") @db.Decimal(18, 2)
+  totalTax        Decimal       @map("total_tax") @db.Decimal(18, 2)
+  status          InvoiceStatus @default(draft)
+  irn             String?       // Invoice Reference Number from IRP
+  qrCode          String?       @map("qr_code")
+  ewayBillNo      String?       @map("eway_bill_no")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  client       Client?       @relation(fields: [clientId], references: [id])
+  lines        InvoiceLine[]
+  transactions Transaction[]
+
+  @@index([clientId, date], map: "idx_invoice_client")
+  @@map("invoices")
+}
+
+enum InvoiceType {
+  TaxInvoice
+  Proforma
+  CreditNote
+  DebitNote
+}
+
+enum InvoiceStatus {
+  draft
+  posted
+  cancelled
+}
+
+/// Invoice line items with HSN, GST, and cost layer references
+model InvoiceLine {
+  id           String   @id @default(uuid()) @db.Uuid
+  invoiceId    String   @map("invoice_id") @db.Uuid
+  productId    String?  @map("product_id") @db.Uuid
+  description  String?
+  qty          Decimal  @db.Decimal(18, 4)
+  unitPrice    Decimal  @map("unit_price") @db.Decimal(18, 4)
+  discount     Decimal  @default(0) @db.Decimal(18, 4)
+  lineNet      Decimal  @map("line_net") @db.Decimal(18, 4)
+  gstRate      Decimal? @map("gst_rate") @db.Decimal(5, 2)
+  gstAmount    Decimal? @map("gst_amount") @db.Decimal(18, 2)
+  hsnCode      String?  @map("hsn_code")
+  warehouseId  String?  @map("warehouse_id") @db.Uuid
+  costLayerIds String?  @map("cost_layer_ids") // JSON array of consumed layer UUIDs
+
+  // Relations
+  invoice Invoice  @relation(fields: [invoiceId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@map("invoice_lines")
+}
+
+// ============================================================
+// 4.4 CLIENTS & KYC
+// ============================================================
+
+/// Client profiles (Buyer, Vendor, or Both)
+model Client {
+  id                  String       @id @default(uuid()) @db.Uuid
+  code                String       @unique
+  name                String
+  type                ClientType
+  defaultCurrency     String       @default("INR") @map("default_currency") @db.Char(3)
+  defaultPaymentTerms String?      @map("default_payment_terms")
+  customerAccountId   String?      @map("customer_account_id") @db.Uuid
+  vendorAccountId     String?      @map("vendor_account_id") @db.Uuid
+  gstin               String?
+  placeOfSupply       String?      @map("place_of_supply")
+  status              ClientStatus @default(prospect)
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  customerAccount Account?        @relation("CustomerAccount", fields: [customerAccountId], references: [id])
+  vendorAccount   Account?        @relation("VendorAccount", fields: [vendorAccountId], references: [id])
+  history         ClientHistory[]
+  kyc             ClientKyc[]
+  invoices        Invoice[]
+  receipts        Receipt[]
+  payments        Payment[]
+
+  @@index([code, name, gstin], map: "idx_clients_search")
+  @@map("clients")
+}
+
+enum ClientType {
+  Customer
+  Vendor
+  Both
+}
+
+enum ClientStatus {
+  prospect
+  active
+  onboarded
+  inactive
+}
+
+/// Client change history — strictly append-only
+model ClientHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  clientId   String   @map("client_id") @db.Uuid
+  changedBy  String?  @map("changed_by") @db.Uuid
+  changedAt  DateTime @default(now()) @map("changed_at") @db.Timestamptz()
+  changeType String   @map("change_type")
+  payload    Json
+
+  // Relations
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@map("client_history")
+}
+
+/// KYC document references
+model ClientKyc {
+  id                 String          @id @default(uuid()) @db.Uuid
+  clientId           String          @map("client_id") @db.Uuid
+  docType            String          @map("doc_type")
+  storageRef         String          @map("storage_ref")
+  uploadedBy         String?         @map("uploaded_by") @db.Uuid
+  uploadedAt         DateTime        @default(now()) @map("uploaded_at") @db.Timestamptz()
+  verificationStatus KycStatus       @default(pending) @map("verification_status")
+  verifiedBy         String?         @map("verified_by") @db.Uuid
+  verifiedAt         DateTime?       @map("verified_at") @db.Timestamptz()
+
+  // Relations
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@map("client_kyc")
+}
+
+enum KycStatus {
+  pending
+  verified
+  rejected
+}
+
+// ============================================================
+// 4.5 BANK & RECEIPTS (Phase 6)
+// ============================================================
+
+/// Bank accounts mapped to ledger accounts
+model BankAccount {
+  id             String   @id @default(uuid()) @db.Uuid
+  accountId      String   @unique @map("account_id") @db.Uuid
+  bankName       String   @map("bank_name")
+  accountNumber  String   @map("account_number")
+  ifscCode       String?  @map("ifsc_code")
+  branch         String?
+  currency       String   @default("INR") @db.Char(3)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  account        Account  @relation(fields: [accountId], references: [id])
+  receipts       Receipt[]
+  payments       Payment[]
+
+  @@map("bank_accounts")
+}
+
+/// Incoming payments from clients (settles AR)
+model Receipt {
+  id               String   @id @default(uuid()) @db.Uuid
+  receiptNumber    String   @unique @map("receipt_number")
+  date             DateTime @db.Date
+  clientId         String   @map("client_id") @db.Uuid
+  bankAccountId    String   @map("bank_account_id") @db.Uuid
+  amount           Decimal  @db.Decimal(18, 2)
+  currency         String   @default("INR") @db.Char(3)
+  paymentMode      PaymentMode @map("payment_mode")
+  referenceNumber  String?  @map("reference_number") // UTR / Cheque No
+  notes            String?
+  status           ReceiptStatus @default(posted)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  client           Client      @relation(fields: [clientId], references: [id])
+  bankAccount      BankAccount @relation(fields: [bankAccountId], references: [id])
+  transactions     Transaction[]
+
+  @@map("receipts")
+}
+
+/// Outgoing payments to vendors (settles AP)
+model Payment {
+  id               String   @id @default(uuid()) @db.Uuid
+  paymentNumber    String   @unique @map("payment_number")
+  date             DateTime @db.Date
+  clientId         String   @map("client_id") @db.Uuid
+  bankAccountId    String   @map("bank_account_id") @db.Uuid
+  amount           Decimal  @db.Decimal(18, 2)
+  currency         String   @default("INR") @db.Char(3)
+  paymentMode      PaymentMode @map("payment_mode")
+  referenceNumber  String?  @map("reference_number") // UTR / Cheque No
+  notes            String?
+  status           ReceiptStatus @default(posted)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  client           Client      @relation(fields: [clientId], references: [id])
+  bankAccount      BankAccount @relation(fields: [bankAccountId], references: [id])
+  transactions     Transaction[]
+
+  @@map("payments")
+}
+
+enum PaymentMode {
+  UPI
+  NEFT
+  RTGS
+  IMPS
+  Cheque
+  Cash
+}
+
+enum ReceiptStatus {
+  draft
+  posted
+  reconciled
+  cancelled
+}

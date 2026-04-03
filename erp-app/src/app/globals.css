@@ -1,0 +1,304 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=Public+Sans:wght@400;500;600&display=swap');
+@import '../styles/design-tokens.css';
+
+/* ============================================================
+   GLOBAL STYLES — Enterprise ERP
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-data);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  background-color: var(--surface-root);
+  min-height: 100vh;
+}
+
+/* Tabular Numbers for financial data */
+.font-tabular {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Display font for financial totals */
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Technical / audit labels */
+.font-technical {
+  font-family: var(--font-technical);
+}
+
+/* ============================================================
+   SELECTION
+   ============================================================ */
+::selection {
+  background-color: var(--color-primary-light);
+  color: var(--text-primary);
+}
+
+/* ============================================================
+   SCROLLBAR STYLING
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-default);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--border-strong);
+}
+
+/* ============================================================
+   FOCUS STYLES
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+   LINKS
+   ============================================================ */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-primary-hover);
+}
+
+/* ============================================================
+   INTEGRITY ANCHOR — 4px bar for ledger-verified data
+   ============================================================ */
+.integrity-anchor {
+  position: relative;
+}
+
+.integrity-anchor::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--integrity-anchor-width);
+  background-color: var(--integrity-anchor);
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+/* ============================================================
+   POSTED / IMMUTABLE STATE OVERLAY
+   ============================================================ */
+.posted-state {
+  background-color: var(--posted-bg);
+  position: relative;
+}
+
+.posted-state::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--posted-overlay);
+  backdrop-filter: blur(0.5px);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-slow) ease-out both;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft var(--transition-slow) ease-out both;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight var(--transition-slow) ease-out both;
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--transition-base) ease-out both;
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Stagger children animations */
+.stagger-children > * {
+  animation: fadeIn var(--transition-slow) ease-out both;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+
+/* ============================================================
+   LAYOUT UTILITIES
+   ============================================================ */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--surface-root);
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.page-viewport {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-8);
+}
+
+.page-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-bottom: var(--space-12);
+}
+
+/* ============================================================
+   TABLE SYSTEM — Per PRD: no vertical borders, row-striping
+   ============================================================ */
+.data-table {
+  width: 100%;
+  text-align: left;
+  font-size: var(--text-sm);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums lining-nums;
+  border-collapse: collapse;
+}
+
+.data-table thead {
+  background-color: var(--surface-container-low);
+}
+
+.data-table th {
+  height: 40px;
+  padding: 0 var(--space-4);
+  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.data-table td {
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-primary);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.data-table tbody tr {
+  transition: background-color var(--transition-fast);
+}
+
+.data-table tbody tr:hover {
+  background-color: var(--surface-overlay);
+}
+
+/* Row striping (alternate to hover-only) */
+.data-table.striped tbody tr:nth-child(even) {
+  background-color: var(--surface-container-low);
+}
+
+/* ============================================================
+   CURRENCY FORMATTING
+   ============================================================ */
+.currency {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: 500;
+}
+
+.currency-positive {
+  color: var(--color-success);
+}
+
+.currency-negative {
+  color: var(--color-danger);
+}
+
+/* ============================================================
+   RESPONSIVE BREAKPOINTS
+   ============================================================ */
+@media (max-width: 768px) {
+  .page-viewport {
+    padding: var(--space-4);
+  }
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-width: 0px;
+  }
+}

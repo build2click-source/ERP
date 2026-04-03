@@ -1,0 +1,1017 @@
+import React, { useState } from 'react';
+import { 
+  Users, FileText, Calendar, ArrowRightLeft, 
+  BookOpen, Package, Landmark, LayoutDashboard, 
+  Plus, Search, Bell, Menu, X, ChevronRight, Download,
+  Save, ArrowLeft, Info, FileUp, Trash2, Receipt,
+  MoreVertical, Filter, TrendingUp, Briefcase, ChevronLeft,
+  CircleDollarSign, Wallet
+} from 'lucide-react';
+
+// --- MOCK DATA ---
+const mockClients = [
+  { id: 1, name: 'AANCHAL INTERNATIONAL LIMITED', type: 'Buyer', contact: 'accounts@aanchal.com', status: 'Active' },
+  { id: 2, name: 'Global Supplies', type: 'Seller', contact: 'sales@global.com', status: 'Active' },
+  { id: 3, name: 'TechSolutions', type: 'Both', contact: 'billing@techsol.com', status: 'Inactive' },
+];
+
+const mockTransactions = [
+  { id: 'TRX-001', date: '2026-03-30', product: 'Industrial Widgets', buyer: 'AANCHAL INTERNATIONAL LIMITED', seller: 'Global Supplies', qty: 500, price: 10, total: 5000, bComm: 100, sComm: 150 },
+  { id: 'TRX-002', date: '2026-03-31', product: 'Copper Wire Spools', buyer: 'TechSolutions', seller: 'Global Supplies', qty: 200, price: 45, total: 9000, bComm: 180, sComm: 270 },
+];
+
+const mockLedger = [
+  { client: 'AANCHAL INTERNATIONAL LIMITED', type: 'Buyer', totalInvoiced: 15000, totalPaid: 10000, outstanding: 5000 },
+  { client: 'Global Supplies', type: 'Seller', totalInvoiced: 22000, totalPaid: 22000, outstanding: 0 },
+];
+
+const mockInvoices = [
+  { id: '03/ARM/2025-26', client: 'AANCHAL INTERNATIONAL LIMITED', date: '2026-03-31', tenure: 'APR-JUN', amount: 500, type: 'Commission (Buyer)', status: 'Pending' },
+  { id: 'INV-2026-02', client: 'Global Supplies', date: '2026-03-01', tenure: 'Q1 2026', amount: 1250, type: 'Commission (Seller)', status: 'Paid' },
+];
+
+const mockBanks = [
+  { id: 1, name: 'Bandhan Bank', address: '12 AC Street', accountNo: '000654321910', ifsc: 'BAND000563', branch: 'KOLKATA', code: '2100' },
+  { id: 2, name: 'Icici Bank', address: '12 JK Street', accountNo: '000654321541', ifsc: 'ICIC000560', branch: 'KOLKATA', code: '7100' },
+];
+
+const mockTransactionDetails = [
+  { id: 1, type: 'Receipt', no: 'RC-024', date: '01-04-2026', particulars: 'Payment from TechSolutions', drAmt: '1500.00', crAmt: '' },
+  { id: 2, type: 'Journal', no: 'JV-102', date: '01-04-2026', particulars: 'Commission Adjustment', drAmt: '', crAmt: '1500.00' },
+];
+
+const mockReceipts = [
+  { id: 'RCT-001', client: 'TechSolutions', bank: 'Bandhan Bank', amount: 1500, date: '01-04-2026', status: 'Cleared' }
+];
+
+// --- STYLING UTILITIES (Modern Minimalist) ---
+const inputClasses = "flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed";
+const labelClasses = "block text-sm font-medium text-slate-700 mb-1.5";
+const primaryBtn = "inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 transition-all";
+const secondaryBtn = "inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 transition-all";
+const cardClasses = "rounded-xl border border-slate-200 bg-white shadow-sm";
+
+export default function App() {
+  const [activeView, setActiveView] = useState('dashboard');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const [isCreatingReceipt, setIsCreatingReceipt] = useState(false);
+  const [isCreatingBank, setIsCreatingBank] = useState(false);
+
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'clients', label: 'Clients', icon: Users },
+    { id: 'transactions', label: 'Transactions', icon: ArrowRightLeft },
+    { id: 'receipts', label: 'Receipts Entry', icon: Receipt },
+    { id: 'invoices', label: 'Sales Invoices', icon: FileText },
+    { id: 'ledger', label: 'Ledger', icon: BookOpen },
+    { id: 'products', label: 'Products', icon: Package },
+    { id: 'bank', label: 'Bank & Reconcile', icon: Landmark },
+    { id: 'tenure', label: 'Billing Tenures', icon: Calendar },
+  ];
+
+  // --- COMPONENT RENDERERS ---
+
+  const renderDashboard = () => (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Overview</h2>
+          <p className="text-sm text-slate-500 mt-1">Monitor your business metrics and recent activity.</p>
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <select className="flex h-9 w-full sm:w-[180px] rounded-md border border-slate-300 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900">
+            <option>Last 30 Days</option>
+            <option>This Quarter</option>
+            <option>This Year</option>
+          </select>
+        </div>
+      </div>
+      
+      {/* Shadcn-style KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Pending Receivables', value: '$12,450', trend: '+2.4%', up: true, icon: Wallet },
+          { label: 'Monthly Transactions', value: '142', trend: '+12.5%', up: true, icon: ArrowRightLeft },
+          { label: 'Active Clients', value: '87', trend: '-1.2%', up: false, icon: Users },
+          { label: 'Unreconciled Entries', value: '12', trend: 'Needs action', up: null, icon: Landmark },
+        ].map((stat, i) => (
+          <div key={i} className={`${cardClasses} p-6 flex flex-col justify-between`}>
+            <div className="flex flex-row items-center justify-between pb-2">
+              <h3 className="tracking-tight text-sm font-medium text-slate-500">{stat.label}</h3>
+              <stat.icon className="h-4 w-4 text-slate-400" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-slate-900">{stat.value}</div>
+              <p className="text-xs text-slate-500 mt-1">
+                {stat.up !== null && (
+                  <span className={`font-medium mr-1 ${stat.up ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {stat.trend}
+                  </span>
+                )}
+                {stat.up === null && <span className="font-medium text-amber-600 mr-1">{stat.trend}</span>}
+                from last period
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={`lg:col-span-2 ${cardClasses} p-0 overflow-hidden flex flex-col`}>
+          <div className="flex justify-between items-center p-6 border-b border-slate-100">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Recent Transactions</h3>
+              <p className="text-sm text-slate-500">Latest logged sales and commissions.</p>
+            </div>
+            <button onClick={() => setActiveView('transactions')} className="text-sm text-slate-900 hover:underline font-medium">View All</button>
+          </div>
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-slate-500 bg-slate-50/50 uppercase border-b border-slate-100">
+                <tr>
+                  <th className="px-6 py-3 font-medium">Client / Details</th>
+                  <th className="px-6 py-3 font-medium text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {mockTransactions.map((trx, i) => (
+                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-900 flex items-center gap-2">
+                        {trx.buyer} <ChevronRight size={14} className="text-slate-400" /> {trx.seller}
+                      </div>
+                      <div className="text-slate-500 mt-1">{trx.product} • {trx.qty} units</div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="font-medium text-slate-900">${trx.total.toLocaleString()}</div>
+                      <div className="text-emerald-600 mt-1">+${(trx.bComm + trx.sComm).toLocaleString()} comm</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className={`${cardClasses} p-6`}>
+          <h3 className="text-base font-semibold text-slate-900 mb-1">Quick Actions</h3>
+          <p className="text-sm text-slate-500 mb-6">Frequently used tools and forms.</p>
+          <div className="flex flex-col gap-3">
+            {[
+              { label: 'New Transaction', icon: Plus, view: 'transactions', action: () => {} },
+              { label: 'Create Invoice', icon: FileText, view: 'invoices', action: () => setIsCreatingInvoice(true) },
+              { label: 'Add Client', icon: Users, view: 'clients', action: () => setIsCreatingClient(true) },
+              { label: 'Log Receipt', icon: Receipt, view: 'receipts', action: () => setIsCreatingReceipt(true) },
+            ].map((btn, i) => (
+              <button 
+                key={i}
+                onClick={() => { setActiveView(btn.view); btn.action(); }} 
+                className="flex items-center gap-3 p-3 rounded-md border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-all text-left group bg-white"
+              >
+                <btn.icon size={18} className="text-slate-500 group-hover:text-slate-900" />
+                <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">{btn.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderDataView = (title, description, actions, tableHeaders, renderRow, data, renderRowActions) => (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{title}</h2>
+          <p className="text-sm text-slate-500 mt-1">{description}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {actions}
+        </div>
+      </div>
+      
+      <div className={cardClasses}>
+        {/* Toolbar */}
+        <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="relative w-full sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input 
+              type="text" 
+              placeholder={`Search...`} 
+              className="flex h-9 w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 py-1 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+            />
+          </div>
+          <button className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none transition-all h-9">
+            <Filter size={14} /> Filters
+          </button>
+        </div>
+        
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/50">
+                {tableHeaders.map((header, i) => (
+                  <th key={i} className="h-10 px-4 text-left align-middle font-medium text-slate-500">{header}</th>
+                ))}
+                <th className="h-10 px-4 align-middle font-medium text-slate-500 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {data.map((row, i) => (
+                <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
+                  {renderRow(row)}
+                  <td className="p-4 text-right align-middle">
+                    {renderRowActions ? renderRowActions(row) : (
+                      <button className="text-slate-900 font-medium text-sm hover:underline">
+                        Edit
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {data.length === 0 && (
+                <tr>
+                  <td colSpan={tableHeaders.length + 1} className="p-8 text-center text-slate-500 text-sm">
+                    No results found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 py-3 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
+          <span>Showing <strong>{data.length}</strong> results</span>
+          <div className="flex gap-1">
+            <button className="inline-flex items-center justify-center rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50 disabled:opacity-50">Previous</button>
+            <button className="inline-flex items-center justify-center rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50 disabled:opacity-50">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // --- FORM VIEWS ---
+
+  const renderCreateClientForm = () => (
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl mx-auto pb-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Create Client Profile</h2>
+          <p className="text-sm text-slate-500 mt-1">Add a new buyer, seller, or dual-role client to the system.</p>
+        </div>
+        <div className="flex gap-3">
+           <button onClick={() => setIsCreatingClient(false)} className={secondaryBtn}>Cancel</button>
+           <button className={primaryBtn}>Save Client</button>
+        </div>
+      </div>
+
+      <div className={cardClasses}>
+        <div className="p-6 sm:p-8 space-y-8">
+          
+          <section>
+            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2 mb-4">Basic Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="md:col-span-2">
+                <label className={labelClasses}>Client Name <span className="text-rose-500">*</span></label>
+                <input type="text" placeholder="Acme Corporation" className={inputClasses} />
+              </div>
+              <div>
+                <label className={labelClasses}>Alias Name</label>
+                <input type="text" placeholder="Acme" className={inputClasses} />
+              </div>
+              <div>
+                 <label className={labelClasses}>Client Type</label>
+                 <select className={inputClasses}>
+                   <option>Buyer</option>
+                   <option>Seller</option>
+                   <option>Both</option>
+                 </select>
+              </div>
+              <div>
+                <label className={labelClasses}>Date of Joining</label>
+                <input type="date" defaultValue="2026-04-01" className={inputClasses} />
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2 mb-4">Contact & Location</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="md:col-span-2">
+                <label className={labelClasses}>Full Address</label>
+                <textarea placeholder="123 Business Rd, Suite 100..." rows="2" className={`${inputClasses} h-auto resize-none`}></textarea>
+              </div>
+              <div>
+                <label className={labelClasses}>Pincode / Zip Code</label>
+                <input type="text" placeholder="Enter Pincode" className={inputClasses} />
+              </div>
+              <div>
+                <label className={labelClasses}>Primary Contact Number</label>
+                <input type="text" placeholder="+1 (555) 000-0000" className={inputClasses} />
+              </div>
+              <div>
+                <label className={labelClasses}>City</label>
+                <input type="text" placeholder="Auto-filled" className={`${inputClasses} bg-slate-50 text-slate-500`} disabled />
+              </div>
+              <div>
+                <label className={labelClasses}>State / Region</label>
+                <input type="text" placeholder="Auto-filled" className={`${inputClasses} bg-slate-50 text-slate-500`} disabled />
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2 mb-4">Billing & Compliance</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className={labelClasses}>Billing Email Address</label>
+                <input type="email" placeholder="billing@company.com" className={inputClasses} />
+              </div>
+              <div>
+                <label className={labelClasses}>Tax ID / GSTIN</label>
+                <input type="text" placeholder="Enter Tax Identification Number" className={inputClasses} />
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+      
+      {/* Bulk Upload Callout */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900">Import multiple clients</h4>
+          <p className="text-sm text-slate-500 mt-1">Use our CSV template to upload clients in bulk.</p>
+        </div>
+        <div className="flex gap-3">
+          <button className="text-sm font-medium text-slate-600 hover:text-slate-900 bg-white border border-slate-300 px-4 py-2 rounded-md shadow-sm">
+            Download Template
+          </button>
+          <button className="text-sm font-medium text-slate-900 hover:text-white bg-slate-200 hover:bg-slate-900 px-4 py-2 rounded-md shadow-sm transition-colors flex items-center gap-2">
+            <FileUp size={16} /> Upload CSV
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderCreateInvoiceForm = () => {
+    const [selectedClient, setSelectedClient] = useState(mockClients[0] || null);
+    const [items, setItems] = useState([{ id: 1, desc: '', qty: '', rate: '' }]);
+
+    const addItem = () => setItems([...items, { id: items.length + 1, desc: '', qty: '', rate: '' }]);
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto pb-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Generate Invoice</h2>
+            <p className="text-sm text-slate-500 mt-1">Draft a new sales or commission invoice.</p>
+          </div>
+          <div className="flex gap-3">
+             <button onClick={() => setIsCreatingInvoice(false)} className={secondaryBtn}>Cancel</button>
+             <button className={primaryBtn}>Save & Generate</button>
+          </div>
+        </div>
+
+        <div className={cardClasses}>
+          <div className="p-6 sm:p-8 space-y-8">
+            
+            {/* Header Data */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div>
+                <label className={labelClasses}>Select Client</label>
+                <select className={inputClasses} value={selectedClient?.name || ''} onChange={(e) => setSelectedClient(mockClients.find(c => c.name === e.target.value))}>
+                  {mockClients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelClasses}>Invoice Date</label>
+                <input type="date" defaultValue="2026-04-01" className={inputClasses} />
+              </div>
+              <div>
+                <label className={labelClasses}>Billing Period / Tenure</label>
+                <input type="text" placeholder="e.g. Q2 2026" defaultValue="APR-JUN 2026" className={inputClasses} />
+              </div>
+            </div>
+
+            {/* Line Items Table */}
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-slate-900">Line Items</h3>
+              </div>
+              
+              <div className="rounded-md border border-slate-200 overflow-hidden">
+                <div className="bg-slate-50 border-b border-slate-200 hidden sm:flex px-4 py-2 text-xs font-medium text-slate-500">
+                  <div className="flex-1">Description</div>
+                  <div className="w-24 px-2">Qty</div>
+                  <div className="w-32 px-2">Rate</div>
+                  <div className="w-10"></div>
+                </div>
+                <div className="divide-y divide-slate-100 bg-white">
+                  {items.map((item, index) => (
+                    <div key={item.id} className="flex flex-col sm:flex-row items-center p-2 sm:p-0 sm:pr-2 gap-2 sm:gap-0">
+                      <div className="flex-1 w-full sm:p-2">
+                        <input type="text" placeholder="Service description..." className={`${inputClasses} border-transparent shadow-none hover:border-slate-300 focus:bg-white bg-slate-50/50`} />
+                      </div>
+                      <div className="w-full sm:w-24 sm:p-2">
+                        <input type="number" placeholder="Qty" className={`${inputClasses} border-transparent shadow-none hover:border-slate-300 focus:bg-white bg-slate-50/50`} />
+                      </div>
+                      <div className="w-full sm:w-32 sm:p-2">
+                        <input type="number" placeholder="Rate ($)" className={`${inputClasses} border-transparent shadow-none hover:border-slate-300 focus:bg-white bg-slate-50/50`} />
+                      </div>
+                      <button className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors w-full sm:w-auto flex justify-center">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button onClick={addItem} className="mt-4 text-sm font-medium text-slate-700 hover:text-slate-900 flex items-center gap-1.5 px-1">
+                <Plus size={16} /> Add line item
+              </button>
+            </div>
+
+            <hr className="border-slate-200" />
+
+            {/* Footer / Taxes */}
+            <div className="flex flex-col md:flex-row gap-10">
+              <div className="w-full md:w-1/2 space-y-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-3">Tax Configuration (%)</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className={labelClasses}>CGST</label>
+                      <input type="number" defaultValue="9" className={inputClasses} />
+                    </div>
+                    <div>
+                      <label className={labelClasses}>SGST</label>
+                      <input type="number" defaultValue="9" className={inputClasses} />
+                    </div>
+                    <div>
+                      <label className={labelClasses}>IGST</label>
+                      <input type="number" defaultValue="0" className={inputClasses} />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                   <label className={labelClasses}>Invoice Notes</label>
+                   <textarea rows="3" placeholder="Terms and conditions..." className={`${inputClasses} h-auto resize-none`}></textarea>
+                </div>
+              </div>
+              
+              <div className="w-full md:w-1/2">
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-6">
+                  <h3 className="text-sm font-semibold text-slate-900 mb-4">Summary</h3>
+                  <div className="space-y-3 text-sm text-slate-600">
+                    <div className="flex justify-between"><span>Subtotal</span> <span className="font-medium text-slate-900">$0.00</span></div>
+                    <div className="flex justify-between"><span>CGST (9%)</span> <span className="font-medium text-slate-900">$0.00</span></div>
+                    <div className="flex justify-between"><span>SGST (9%)</span> <span className="font-medium text-slate-900">$0.00</span></div>
+                    <div className="pt-4 mt-2 border-t border-slate-200 flex justify-between items-center">
+                      <span className="font-semibold text-slate-900">Total Amount</span> 
+                      <span className="text-2xl font-bold text-slate-900">$0.00</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderReceiptEntryForm = () => (
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl mx-auto pb-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Record Receipt</h2>
+          <p className="text-sm text-slate-500 mt-1">Log an incoming payment into a specific bank account.</p>
+        </div>
+        <div className="flex gap-3">
+           <button onClick={() => setIsCreatingReceipt(false)} className={secondaryBtn}>Cancel</button>
+           <button className={primaryBtn}>Save Receipt</button>
+        </div>
+      </div>
+
+      <div className={cardClasses}>
+        <div className="p-6 sm:p-8">
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+            <div>
+               <label className={labelClasses}>Bank Account</label>
+               <select className={inputClasses}>
+                 <option value="">Select Receiving Bank</option>
+                 {mockBanks.map(b => <option key={b.id}>{b.name}</option>)}
+               </select>
+            </div>
+            <div>
+               <label className={labelClasses}>Client (Payer)</label>
+               <select className={inputClasses}>
+                 <option value="">Select Payer</option>
+                 {mockClients.map(c => <option key={c.id}>{c.name}</option>)}
+               </select>
+            </div>
+          </div>
+
+          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2 mb-4">Transaction Details</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label className={labelClasses}>Bill / Invoice Number</label>
+              <input type="text" placeholder="e.g. INV-2026-02" className={inputClasses} />
+            </div>
+            <div>
+              <label className={labelClasses}>Payment Method</label>
+              <select className={inputClasses}>
+                <option>NEFT</option>
+                <option>RTGS</option>
+                <option>IMPS</option>
+                <option>Cheque</option>
+                <option>Wire Transfer</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClasses}>Received Amount</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                <input type="number" placeholder="0.00" className={`${inputClasses} pl-8`} />
+              </div>
+            </div>
+            <div>
+              <label className={labelClasses}>TDS Deducted</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                <input type="number" placeholder="0.00" className={`${inputClasses} pl-8`} />
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClasses}>Transaction Reference Number (UTR)</label>
+              <input type="text" placeholder="e.g. UTR123456789" className={inputClasses} />
+            </div>
+            
+            <div className="grid grid-cols-3 col-span-1 md:col-span-2 gap-5 pt-2">
+              <div>
+                <label className={labelClasses}>Transaction Date</label>
+                <input type="date" defaultValue="2026-04-01" className={inputClasses} />
+              </div>
+              <div>
+                <label className={labelClasses}>Instrument Date</label>
+                <input type="date" defaultValue="2026-04-01" className={inputClasses} />
+              </div>
+              <div>
+                <label className={labelClasses}>Clearing Date</label>
+                <input type="date" defaultValue="2026-04-01" className={inputClasses} />
+              </div>
+            </div>
+
+            <div className="md:col-span-2 pt-2">
+              <label className={labelClasses}>Payment Status</label>
+              <select className={`${inputClasses} md:w-1/2`}>
+                <option>Cleared</option>
+                <option>Pending Validation</option>
+                <option>Bounced / Failed</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderCreateBankForm = () => (
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto pb-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Add Bank Account</h2>
+          <p className="text-sm text-slate-500 mt-1">Register a company bank account for reconciliation.</p>
+        </div>
+        <div className="flex gap-3">
+           <button onClick={() => setIsCreatingBank(false)} className={secondaryBtn}>Cancel</button>
+           <button className={primaryBtn}>Save Account</button>
+        </div>
+      </div>
+
+      <div className={cardClasses}>
+        <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="md:col-span-2">
+            <label className={labelClasses}>Bank Name</label>
+            <input type="text" placeholder="e.g. Chase Bank, Barclays" className={inputClasses} />
+          </div>
+          <div>
+            <label className={labelClasses}>Account Number</label>
+            <input type="text" placeholder="Enter Account Number" className={inputClasses} />
+          </div>
+          <div>
+            <label className={labelClasses}>Routing / IFSC Code</label>
+            <input type="text" placeholder="Routing or IFSC Code" className={inputClasses} />
+          </div>
+          <div>
+            <label className={labelClasses}>Branch Name</label>
+            <input type="text" placeholder="e.g. Downtown Branch" className={inputClasses} />
+          </div>
+          <div>
+            <label className={labelClasses}>Bank / Swift Code</label>
+            <input type="text" placeholder="SWIFT or Bank Code" className={inputClasses} />
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelClasses}>Branch Address</label>
+            <textarea placeholder="Full branch address" rows="2" className={`${inputClasses} h-auto resize-none`}></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // --- TAB RENDERERS ---
+
+  const renderClients = () => {
+    if (isCreatingClient) return renderCreateClientForm();
+
+    return renderDataView(
+      'Client Management',
+      'Manage all buyer and seller profiles.',
+      <>
+        <button onClick={() => setActiveView('dashboard')} className={secondaryBtn}>
+          Dashboard
+        </button>
+        <button onClick={() => setIsCreatingClient(true)} className={primaryBtn}>
+          <Plus size={16} /> New Client
+        </button>
+      </>,
+      ['Client Name', 'Type', 'Contact', 'Status'],
+      (client) => (
+        <>
+          <td className="p-4">
+            <p className="font-medium text-sm text-slate-900 truncate max-w-[250px]" title={client.name}>{client.name}</p>
+            <p className="text-xs text-slate-500 mt-0.5">ID: {client.id.toString().padStart(4, '0')}</p>
+          </td>
+          <td className="p-4 text-sm text-slate-600">{client.type}</td>
+          <td className="p-4 text-sm text-slate-600">{client.contact}</td>
+          <td className="p-4">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${client.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-800'}`}>
+              {client.status}
+            </span>
+          </td>
+        </>
+      ),
+      mockClients
+    );
+  };
+
+  const renderTransactions = () => {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Transaction Details</h2>
+            <p className="text-sm text-slate-500 mt-1">Detailed ledger of all system transactions.</p>
+          </div>
+          <button onClick={() => setActiveView('dashboard')} className={secondaryBtn}>
+            Return to Dashboard
+          </button>
+        </div>
+        
+        <div className={cardClasses}>
+          
+          {/* Filters Area */}
+          <div className="p-5 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row gap-4 lg:items-end">
+            <div className="flex-1 max-w-sm">
+              <label className={labelClasses}>Select Client</label>
+              <select className={inputClasses}>
+                <option>-- All Clients --</option>
+                {mockClients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+            
+            <div className="flex-1 max-w-md">
+              <label className={labelClasses}>Date Range</label>
+              <div className="flex items-center gap-2">
+                <input type="date" defaultValue="2026-04-01" className={inputClasses} />
+                <span className="text-slate-400 font-medium">-</span>
+                <input type="date" defaultValue="2026-04-30" className={inputClasses} />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-4 lg:mt-0">
+              <button className="bg-slate-900 text-white px-6 py-2 rounded-md text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm h-10">
+                Apply Filters
+              </button>
+              <button className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 h-10">
+                <Download size={16} /> PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Special Transaction Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="h-10 px-4 font-medium text-slate-500 border-r border-slate-200 w-[12%]">Type</th>
+                  <th className="h-10 px-4 font-medium text-slate-500 border-r border-slate-200 w-[12%]">Ref No</th>
+                  <th className="h-10 px-4 font-medium text-slate-500 border-r border-slate-200 w-[12%]">Date</th>
+                  <th className="h-10 px-4 font-medium text-slate-500 border-r border-slate-200 w-[34%]">Particulars</th>
+                  <th className="h-10 px-4 font-medium text-slate-500 border-r border-slate-200 w-[15%] text-right">Debit (Dr)</th>
+                  <th className="h-10 px-4 font-medium text-slate-500 w-[15%] text-right">Credit (Cr)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {mockTransactionDetails.length > 0 ? (
+                  mockTransactionDetails.map((trx, index) => (
+                    <tr key={index} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-4 text-sm font-medium text-slate-900 border-r border-slate-200">{trx.type}</td>
+                      <td className="p-4 text-sm font-mono text-slate-600 border-r border-slate-200">{trx.no}</td>
+                      <td className="p-4 text-sm text-slate-600 border-r border-slate-200">{trx.date}</td>
+                      <td className="p-4 text-sm text-slate-800 border-r border-slate-200">{trx.particulars}</td>
+                      <td className="p-4 text-sm font-medium text-slate-900 border-r border-slate-200 text-right">{trx.drAmt ? `$${trx.drAmt}` : '-'}</td>
+                      <td className="p-4 text-sm font-medium text-slate-900 text-right">{trx.crAmt ? `$${trx.crAmt}` : '-'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="p-8 text-center text-slate-500 text-sm">No transactions match your criteria</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderReceipts = () => {
+    if (isCreatingReceipt) return renderReceiptEntryForm();
+
+    return renderDataView(
+      'Receipts Log',
+      'Track incoming payments and bank reconciliations.',
+      <>
+        <button onClick={() => setActiveView('dashboard')} className={secondaryBtn}>
+          Dashboard
+        </button>
+        <button onClick={() => setIsCreatingReceipt(true)} className={primaryBtn}>
+          <Plus size={16} /> New Receipt
+        </button>
+      </>,
+      ['Receipt ID', 'Client', 'Bank', 'Amount', 'Date', 'Status'],
+      (receipt) => (
+        <>
+          <td className="p-4 font-mono text-sm font-medium text-slate-900">{receipt.id}</td>
+          <td className="p-4 text-sm text-slate-700">{receipt.client}</td>
+          <td className="p-4 text-sm text-slate-500">{receipt.bank}</td>
+          <td className="p-4 font-medium text-sm text-slate-900">${receipt.amount.toLocaleString()}</td>
+          <td className="p-4 text-sm text-slate-500">{receipt.date}</td>
+          <td className="p-4">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${receipt.status === 'Cleared' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+              {receipt.status}
+            </span>
+          </td>
+        </>
+      ),
+      mockReceipts
+    );
+  };
+
+  const renderInvoices = () => {
+    if (isCreatingInvoice) return renderCreateInvoiceForm();
+
+    return renderDataView(
+      'Sales & Commission Invoices',
+      'Manage invoices issued to buyers and sellers.',
+      <>
+        <button onClick={() => setActiveView('dashboard')} className={secondaryBtn}>
+          Dashboard
+        </button>
+        <button onClick={() => setIsCreatingInvoice(true)} className={primaryBtn}>
+          <Plus size={16} /> New Invoice
+        </button>
+      </>,
+      ['Invoice #', 'Client', 'Tenure', 'Amount', 'Status'],
+      (inv) => (
+        <>
+          <td className="p-4 font-mono text-sm font-medium text-slate-900">{inv.id}</td>
+          <td className="p-4">
+            <p className="font-medium text-sm text-slate-900 truncate max-w-[200px]" title={inv.client}>{inv.client}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{inv.type}</p>
+          </td>
+          <td className="p-4 text-sm text-slate-500">{inv.tenure}</td>
+          <td className="p-4 font-medium text-sm text-slate-900">${inv.amount.toLocaleString()}</td>
+          <td className="p-4">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-800'}`}>
+              {inv.status}
+            </span>
+          </td>
+        </>
+      ),
+      mockInvoices
+    );
+  };
+
+  const renderLedger = () => {
+    return renderDataView(
+      'Client Ledgers',
+      'View outstanding balances and financial summaries per client.',
+      <>
+        <button onClick={() => setActiveView('dashboard')} className={secondaryBtn}>
+          Dashboard
+        </button>
+        <button className={secondaryBtn}>
+          <Download size={16} /> Export CSV
+        </button>
+      </>,
+      ['Client', 'Type', 'Total Invoiced', 'Total Paid', 'Outstanding'],
+      (entry) => (
+        <>
+          <td className="p-4 font-medium text-sm text-slate-900 truncate max-w-[250px]" title={entry.client}>{entry.client}</td>
+          <td className="p-4 text-sm text-slate-600">{entry.type}</td>
+          <td className="p-4 text-sm text-slate-700">${entry.totalInvoiced.toLocaleString()}</td>
+          <td className="p-4 text-sm text-slate-700">${entry.totalPaid.toLocaleString()}</td>
+          <td className={`p-4 font-medium text-sm ${entry.outstanding > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+            ${entry.outstanding.toLocaleString()}
+          </td>
+        </>
+      ),
+      mockLedger
+    );
+  };
+
+  const renderBank = () => {
+    if (isCreatingBank) return renderCreateBankForm();
+
+    return renderDataView(
+      'Configured Banks',
+      'Manage company bank accounts for receipt mapping.',
+      <>
+        <button onClick={() => setActiveView('dashboard')} className={secondaryBtn}>
+          Dashboard
+        </button>
+        <button onClick={() => setIsCreatingBank(true)} className={primaryBtn}>
+          <Plus size={16} /> Add Bank
+        </button>
+      </>,
+      ['Bank Name', 'Account Number', 'Branch', 'IFSC / Routing'],
+      (bank) => (
+        <>
+          <td className="p-4">
+            <p className="font-medium text-sm text-slate-900">{bank.name}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Code: {bank.code}</p>
+          </td>
+          <td className="p-4 font-mono text-sm text-slate-600">{bank.accountNo}</td>
+          <td className="p-4 text-sm text-slate-600">{bank.branch}</td>
+          <td className="p-4 font-mono text-sm text-slate-600">{bank.ifsc}</td>
+        </>
+      ),
+      mockBanks,
+      (bank) => (
+        <div className="flex justify-end items-center gap-3 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+          <button className="text-slate-900 hover:underline">Edit</button>
+          <button className="text-slate-400 hover:text-slate-900"><MoreVertical size={16}/></button>
+        </div>
+      )
+    );
+  };
+
+  const renderPlaceholder = (title, description) => (
+    <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-in fade-in duration-500">
+      <div className="bg-white border border-slate-200 p-6 rounded-2xl mb-6 shadow-sm">
+        <LayoutDashboard size={32} className="text-slate-400" />
+      </div>
+      <h2 className="text-xl font-bold text-slate-900 mb-2 tracking-tight">{title}</h2>
+      <p className="text-sm text-slate-500 max-w-md">{description}</p>
+      <button onClick={() => setActiveView('dashboard')} className="mt-8 text-sm font-medium text-slate-900 hover:bg-slate-100 border border-slate-200 px-4 py-2 rounded-md transition-colors">
+        Return to Dashboard
+      </button>
+    </div>
+  );
+
+  // --- MAIN APP SHELL ---
+  return (
+    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 selection:bg-slate-200 selection:text-slate-900">
+      
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 z-40 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* SIDEBAR (Light Minimalist) */}
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        flex flex-col border-r border-slate-200
+      `}>
+        <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <div className="bg-slate-900 p-1.5 rounded shadow-sm">
+              <Landmark size={18} className="text-white" />
+            </div>
+            <span className="text-lg font-bold text-slate-900 tracking-tight">CommisERP</span>
+          </div>
+          <button className="lg:hidden text-slate-500 hover:text-slate-900 transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
+            <X size={20} />
+          </button>
+        </div>
+        
+        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+          {navItems.map((item) => {
+            const isActive = activeView === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveView(item.id);
+                  setIsMobileMenuOpen(false);
+                  setIsCreatingClient(false);
+                  setIsCreatingInvoice(false);
+                  setIsCreatingReceipt(false);
+                  setIsCreatingBank(false);
+                }}
+                className={`
+                  w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200
+                  ${isActive 
+                    ? 'bg-slate-100 text-slate-900' 
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+                `}
+              >
+                <item.icon size={18} className={isActive ? "text-slate-900" : "text-slate-400"} />
+                {item.label}
+              </button>
+            )
+          })}
+        </nav>
+
+        {/* User Profile Footer */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">
+              AD
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-900 truncate">Admin User</p>
+              <p className="text-xs text-slate-500">admin@company.com</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        
+        {/* TOP HEADER */}
+        <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-4 sm:px-8 z-10 sticky top-0">
+          <div className="flex items-center gap-4">
+            <button 
+              className="lg:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <Menu size={20} />
+            </button>
+            
+            <div className="hidden sm:flex items-center gap-2 text-sm text-slate-500">
+              <LayoutDashboard size={14} />
+              <ChevronRight size={14} className="text-slate-300" />
+              <span className="text-slate-900 font-medium">
+                {navItems.find(i => i.id === activeView)?.label}
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input type="text" placeholder="Search..." className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:bg-white focus:border-slate-400 focus:ring-1 focus:ring-slate-400 outline-none w-48 transition-all" />
+            </div>
+            <button className="relative text-slate-400 hover:text-slate-600 transition-colors">
+              <Bell size={18} />
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white"></span>
+            </button>
+          </div>
+        </header>
+
+        {/* SCROLLABLE VIEWPORT */}
+        <div className="flex-1 overflow-auto p-4 sm:p-8">
+          <div className="max-w-6xl mx-auto pb-12">
+            {activeView === 'dashboard' && renderDashboard()}
+            {activeView === 'clients' && renderClients()}
+            {activeView === 'transactions' && renderTransactions()}
+            {activeView === 'receipts' && renderReceipts()}
+            {activeView === 'invoices' && renderInvoices()}
+            {activeView === 'ledger' && renderLedger()}
+            {activeView === 'bank' && renderBank()}
+            
+            {activeView === 'products' && renderPlaceholder('Products Catalogue', 'Manage your master product list, base pricing, and categories.')}
+            {activeView === 'tenure' && renderPlaceholder('Billing Tenures', 'Configure automated billing cycles (monthly, quarterly, yearly).')}
+          </div>
+        </div>
+
+      </main>
+    </div>
+  );
+}

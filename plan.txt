@@ -1,0 +1,220 @@
+Product Requirements Document (PRD): Finance, Inventory, Invoicing & Clients Module
+Project Name: Enterprise ERP System
+Design Philosophy: The Monolith of Precision
+Target Region: India (State Context: West Bengal / Bagda)
+Document Version: 2.0 (Final)
+1. Executive Summary
+Goal: Deliver an integrated ERP module that provides an immutable double‑entry ledger, product catalog, inventory costing (FIFO/LIFO), GST‑aware invoicing with e‑invoicing support, and a comprehensive client management/onboarding system. The system must guarantee accounting integrity (Assets = Liabilities + Equity), full auditability, and operational performance via month‑end snapshots and targeted indexes.
+Primary Users: Finance team, Sales, Warehouse operations, Onboarding agents, and Auditors.
+Key Non-Functional Requirements: * ACID transactional integrity.
+Append‑only financial records with tamper evidence.
+Strict Role-Based Access Control (RBAC).
+Data privacy compliance for KYC documents.
+High availability for high-volume posting operations.
+2. Objectives and Scope
+Accounting: Implement an immutable double‑entry ledger with database‑enforced zero‑sum per transaction and contra-entry correction flows.
+Invoicing: Create tax‑aware invoices that auto‑generate balanced ledger transactions and support IRN/QR generation via GSP/IRP.
+Products & Inventory: Maintain a robust product catalog, dynamic cost layers, and FIFO/LIFO consumption with automatic COGS (Cost of Goods Sold) posting.
+Clients: Manage the full client lifecycle (create, edit, onboard, KYC, link to AR/AP accounts) with a comprehensive audit history.
+Performance: Utilize month‑end snapshots and targeted indexing to keep balance queries highly performant.
+Compliance: Ensure strict GST mapping, e‑invoicing compliance, e‑way bill data capture, and an immutable audit trail.
+3. UX & Design System: "The Monolith of Precision"
+The interface must feel organized, dense, and unshakeable, functioning as a precision instrument for financial operations.
+Color & Tonal Layering: Anchored in "Command Navy" (#0e1629). Use shifting background surface tones (surface_container_low vs surface) instead of 1px solid borders to define boundaries (The "No-Line" Rule).
+Typography: Manrope for authoritative financial totals; Inter with tabular lining (tnum) for highly legible 20+ column data grids; Public Sans for technical/audit labels.
+Depth & Components: Use "stacking" layers for elevation. Data grids have no vertical borders, relying on row-striping or vertical spacing.
+Integrity Visuals: A persistent 4px vertical bar of primary color (Integrity Anchor) denotes data verified against the ledger. Posted transactions receive a surface_dim background and glass overlay denoting immutability.
+4. Data Model Overview
+The core tables use UUID primary keys and timezone-aware timestamps (TIMESTAMPTZ). All financial posting tables are strictly append-only.
+4.1 Core Accounting
+SQL
+ 
+CREATE TABLE accounts (
+  id UUID PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL, -- Asset|Liability|Equity|Revenue|Expense  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  is_p_and_l BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID
+);CREATE INDEX idx_accounts_type ON accounts(type);
+CREATE TABLE transactions (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  posted_at TIMESTAMPTZ,   description TEXT,  reference_id TEXT,  invoice_id UUID,   created_by UUID,  metadata JSONB
+);CREATE TABLE journal_entries (
+  id UUID PRIMARY KEY,
+  transaction_id UUID NOT NULL REFERENCES transactions(id),
+  account_id UUID NOT NULL REFERENCES accounts(id),
+  amount NUMERIC(18,2) NOT NULL, -- signed: debit positive, credit negative  entry_type TEXT NOT NULL, -- Dr|Cr  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  tax_code TEXT,  warehouse_id UUID,  cost_layer_id UUID,  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);CREATE INDEX idx_journal_account_posted ON journal_entries(account_id, created_at);CREATE INDEX idx_journal_tx ON journal_entries(transaction_id);
+CREATE TABLE account_snapshots (
+  id UUID PRIMARY KEY,
+  account_id UUID NOT NULL REFERENCES accounts(id),
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  balance NUMERIC(18,2) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX ux_snapshot_account_period ON account_snapshots(account_id, period_start, period_end);
+ 
+4.2 Products & Inventory
+SQL
+ 
+CREATE TABLE products (
+  id UUID PRIMARY KEY,
+  sku TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  hsn_code TEXT,  default_uom TEXT,  is_stocked BOOLEAN NOT NULL DEFAULT true,
+  default_income_account_id UUID REFERENCES accounts(id),
+  gst_rate NUMERIC(5,2),
+  gst_type TEXT, -- CGST_SGST|IGST  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE cost_layers (
+  id UUID PRIMARY KEY,
+  product_id UUID NOT NULL REFERENCES products(id),
+  warehouse_id UUID,  qty NUMERIC(18,4) NOT NULL,
+  unit_cost NUMERIC(18,4) NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  remaining_qty NUMERIC(18,4) NOT NULL);CREATE INDEX idx_cost_layers_product ON cost_layers(product_id, received_at);
+CREATE TABLE inventory_movements (
+  id UUID PRIMARY KEY,
+  product_id UUID NOT NULL REFERENCES products(id),
+  warehouse_id UUID,
+  movement_type TEXT NOT NULL, -- receipt|issue|transfer|adjustment
+  qty NUMERIC(18,4) NOT NULL,
+  unit_cost NUMERIC(18,4),
+  related_tx_id UUID, 
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ 
+4.3 Invoicing & Documents
+SQL
+ 
+CREATE TABLE invoices (
+  id UUID PRIMARY KEY,
+  invoice_number TEXT UNIQUE,
+  type TEXT NOT NULL, -- TaxInvoice|Proforma|CreditNote|DebitNotedate DATE NOT NULL,
+  client_id UUID REFERENCES clients(id),
+  billing_address JSONB,  shipping_address JSONB,  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  total_amount NUMERIC(18,2) NOT NULL,
+  total_tax NUMERIC(18,2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft', -- draft|posted|cancelled  irn TEXT,  qr_code TEXT,  eway_bill_no TEXT,  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);CREATE INDEX idx_invoice_client ON invoices(client_id, date);
+CREATE TABLE invoice_lines (
+  id UUID PRIMARY KEY,
+  invoice_id UUID NOT NULL REFERENCES invoices(id),
+  product_id UUID REFERENCES products(id),
+  description TEXT,  qty NUMERIC(18,4) NOT NULL,
+  unit_price NUMERIC(18,4) NOT NULL,
+  discount NUMERIC(18,4) DEFAULT 0,
+  line_net NUMERIC(18,4) NOT NULL,
+  gst_rate NUMERIC(5,2),
+  gst_amount NUMERIC(18,2),
+  hsn_code TEXT,
+  warehouse_id UUID,
+  cost_layer_ids TEXT 
+);
+ 
+4.4 Clients & KYC
+SQL
+ 
+CREATE TABLE clients (
+  id UUID PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL, -- Customer|Vendor|Both  default_currency CHAR(3) NOT NULL DEFAULT 'INR',
+  default_payment_terms TEXT,  customer_account_id UUID REFERENCES accounts(id),
+  vendor_account_id UUID REFERENCES accounts(id),
+  gstin TEXT,  place_of_supply TEXT,  status TEXT NOT NULL DEFAULT 'prospect',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);CREATE INDEX idx_clients_search ON clients(code, name, gstin);
+CREATE TABLE client_history (
+  id UUID PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id),
+  changed_by UUID,  changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  change_type TEXT NOT NULL,
+  payload JSONB NOT NULL
+);
+CREATE TABLE client_kyc (
+  id UUID PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id),
+  doc_type TEXT NOT NULL,
+  storage_ref TEXT NOT NULL,
+  uploaded_by UUID,
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  verification_status TEXT DEFAULT 'pending',
+  verified_by UUID,
+  verified_at TIMESTAMPTZ
+);
+ 
+5. Business Rules and Constraints
+Zero-Sum Enforcement: Every transaction must mathematically satisfy SUM(journal_entries.amount) = 0. This is enforced via a deferred database trigger that rejects unbalanced transactions at commit.
+Immutability: Once a transaction's posted_at is NOT NULL, UPDATE or DELETE commands are hard-blocked on transactions and journal_entries.
+Corrections (Contra Pattern): 1. Create a reversing transaction that negates the original lines, referencing original_transaction_id in metadata.
+
+2. Create a new, corrected transaction.
+Invoice Posting Atomicity: Posting must occur in a single atomic database transaction:
+Validate client GSTIN and place of supply.
+Reserve/consume cost layers for stocked items per FIFO/LIFO policy.
+Create inventory movement rows and cost layer consumption records.
+Create ledger transaction and journal_entries for AR, Revenue, Output GST, Inventory Asset, COGS, and AP.
+Mark invoice status = 'posted' and store transaction_id.
+Cost Layer Consumption: On inventory issue, consume cost_layers rows in chronological order (FIFO) or reverse (LIFO). Reduce remaining_qty and record the consumed layer IDs on the invoice lines.
+Snapshots: At month-end close, compute account_snapshots to accelerate balance queries. Live Balance Formula: snapshot.balance + SUM(journal_entries after snapshot_end).
+Tax Handling: Tax components must be separate journal lines with explicit tax_code and gst_type. Supplier and recipient GSTINs are snapshotted on the invoice for B2B transactions.
+6. Indexing, Partitioning, and Performance
+Primary Indexes:
+journal_entries(account_id, created_at) for balance queries.
+journal_entries(transaction_id) for transaction retrieval.
+invoices(client_id, date) for AR aging reporting.
+cost_layers(product_id, received_at) for layer consumption logic.
+Partitioning: Partition journal_entries by year (or month for extreme volumes) to maintain query speed on historical data.
+Materialized Views: Optional nightly refreshed view for current balances per account to serve executive dashboards.
+Batching: Use batched writes for bulk imports, ensuring zero-sum enforcement applies per individual batch transaction.
+7. API Design and Event Model
+Core REST Endpoints:
+POST /api/clients — Create client; automatically writes to client_history.
+PUT /api/clients/{id} — Update client; appends to client_history.
+GET /api/clients — List clients with filters and pagination.
+POST /api/invoices — Create an invoice draft.
+POST /api/invoices/{id}/post — Validate, post invoice, create ledger transaction, and trigger e‑invoice adapter.
+POST /api/payments — Record payment; create transaction to debit bank and credit AR.
+POST /api/inventory/receive — Create receipt, establish cost layer, and post accounting transaction.
+POST /api/inventory/issue — Consume cost layers, record movement, and post accounting transaction.
+Events and Webhooks (Idempotent):
+Emit payloads containing event ID, timestamp, and a data snapshot for: client.created, client.updated, client.activated, invoice.posted (includes IRN), payment.received, and inventory.movement.posted.
+8. E-Invoicing Adapter & Payload (India GST)
+Responsibilities: Build IRN payload, sign/submit to GSP (GST Suvidha Provider), handle IRP responses, store IRN and signed JSON immutably, and manage retries with idempotency keys.
+Minimum Payload Fields: Supplier GSTIN, Recipient GSTIN, Invoice Number, Invoice Date, Invoice Value, HSN Summary, Tax Breakup, Place of Supply, Invoice Lines (with HSN and tax rate).
+Storage: Store the IRP-signed response and generated QR code directly on the invoices record.
+9. Security, Compliance, and Audit
+RBAC: * Admin: Full system access.
+Finance: Ledger, AR/AP, Contra-entries.
+Sales: Read catalog, draft clients/invoices.
+Onboarding: Manage KYC and client activation.
+ReadOnly: Auditor access.
+Audit Trail: client_history, transactions, and journal_entries are strictly append-only. Access to sensitive fields (GSTIN, PAN, KYC docs) triggers a read-receipt log.
+Data Protection: Encrypt KYC storage references and sensitive columns at rest. Enforce TLS 1.2+ in transit.
+Tamper Evidence: Implement an optional cryptographic hashing chain for transactions to detect database-level tampering.
+Retention: Retain full ledger and audit history indefinitely per statutory financial requirements.
+10. Testing, Validation, and Rollout Plan
+Testing Strategy:
+Unit Tests: Zero-sum enforcement, contra-entry generation, cost layer consumption logic, and state-aware GST calculations.
+Integration Tests: End-to-end flow: Create Prospect → Onboard/KYC → Create Draft Invoice → Post → Verify Ledger lines and AR balances; E-invoice flow via GSP sandbox.
+Load Tests: Simulate high-volume posting and test snapshot-assisted balance query performance.
+Audit Review: Sample audit by an external auditor to validate immutability and traceability prior to go-live.
+Rollout Checklist:
+Implement core ledger, accounts, transactions, and journal entries.
+Add products, cost layers, and inventory movements.
+Add invoices and internal posting flows (without external e-invoicing); test end‑to‑end accounting.
+Integrate GSP sandbox, validate payloads, and enable production e-invoicing.
+Deploy client CRM module and automated onboarding flows.
+Run parallel accounting for one month, reconcile against legacy systems, and execute full cutover.
+11. Final Deliverables & Next Steps
+Deliverable 1: Full SQL DDL scripts for all tables, indexes, triggers, and constraints. (Completed in Section 4)
+Deliverable 2: API specification (OpenAPI v3) for the core endpoints.
+Deliverable 3: Posting engine pseudocode and transaction lifecycle logic.
+Deliverable 4: GSP adapter specification and sample IRP payload JSON.
+Deliverable 5: Detailed test plan and final rollout checklist.
